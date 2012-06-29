@@ -80,6 +80,17 @@ class Globalize3Test < Test::Unit::TestCase
     assert_equal 'foo', post.title
   end
 
+  test "reload works with translated attributes when updated elsewhere" do
+    post = Post.create(:title => 'foo')
+    post.title  # make sure its fetched from the DB
+
+    Post.find_by_id(post.id).update_attributes! :title => 'bar'
+
+    post.reload
+
+    assert_equal 'bar', post.title
+  end
+
   test "reload accepts standard finder options" do
     post = Post.create(:title => "title")
     assert post.reload(:readonly => true, :lock => true)
@@ -139,6 +150,12 @@ class Globalize3Test < Test::Unit::TestCase
     assert_equal ['title 1', 'title 2'], Post.with_translations.map(&:title)
   end
 
+  test "translation_for ignores with_translations scope" do
+    post = with_locale(:de) { Post.create(:title => 'title de') }
+    with_locale(:en) { post.update_attributes(:title => 'title en') }
+    
+    assert_equal 'title en', Post.with_translations(:de).first.translation_for(:en).title
+  end
 
   test "a subclass of an untranslated model can translate attributes" do
     post = Post.create(:title => 'title')
@@ -155,5 +172,11 @@ class Globalize3Test < Test::Unit::TestCase
     assert translated_comment.update_attributes(:content => 'Inhalt', :locale => :de)
     assert_translated translated_comment, :en, :content, 'content'
     assert_translated translated_comment, :de, :content, 'Inhalt'
+  end
+
+  test "calling translates a second times adds the new attributes to the translated attributes" do
+    page = Page.new :title => 'Wilkommen', :body => 'Ein body', :locale => :de
+    assert_translated page, :de, :title, 'Wilkommen'
+    assert_translated page, :de, :body, 'Ein body'
   end
 end

@@ -62,6 +62,15 @@ ActiveRecord::Schema.define do
     t.string     :string
   end
 
+  create_table :nested_validatees, :force => true do |t|
+  end
+
+  create_table :nested_validatee_translations, :force => true do |t|
+    t.references :nested_validatee
+    t.string     :locale
+    t.string     :string
+  end
+
   create_table :users, :force => true do |t|
     t.string   :email
     t.datetime :created_at
@@ -101,8 +110,28 @@ ActiveRecord::Schema.define do
   end
 
   create_table :UPPERCASE_TABLE_NAME_translations, :force => true do |t|
-    t.integer 'UPPERCASE_TABLE_NAME_id'
+    t.integer  'uppercase_table_name_id'
     t.string     :locale
     t.string     :name
+  end
+
+  create_table :news, :force => true do |t|
+    t.string :title
+  end
+
+  create_table :news_item_translations, :force => true do |t|
+    t.integer  'news_id'
+    t.string     :locale
+    t.string     :title
+  end
+
+  create_table :pages, :force => true do |t|
+  end
+
+  create_table :page_translations, :force => true do |t|
+    t.integer    :page_id
+    t.string     :locale
+    t.string     :title
+    t.string     :body
   end
 end

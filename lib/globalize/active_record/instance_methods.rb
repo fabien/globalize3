@@ -11,16 +11,29 @@ module Globalize
         super.merge(translated_attributes)
       end
 
-      def attributes=(attributes, *args)
-        with_given_locale(attributes) { super }
-      end
+      def self.included(base)
+        # Maintain Rails 3.0.x compatibility while adding Rails 3.1.x compatibility
+        if base.method_defined?(:assign_attributes)
+          base.class_eval %{
+            def assign_attributes(attributes, options = {})
+              with_given_locale(attributes) { super }
+            end
+          }
+        else
+          base.class_eval %{
+            def attributes=(attributes, *args)
+              with_given_locale(attributes) { super }
+            end
 
-      def update_attributes!(attributes, *args)
-        with_given_locale(attributes) { super }
-      end
+            def update_attributes!(attributes, *args)
+              with_given_locale(attributes) { super }
+            end
 
-      def update_attributes(attributes, *args)
-        with_given_locale(attributes) { super }
+            def update_attributes(attributes, *args)
+              with_given_locale(attributes) { super }
+            end
+          }
+        end
       end
 
       def write_attribute(name, value, options = {})
@@ -35,7 +48,9 @@ module Globalize
         options = {:translated => true, :locale => nil}.merge(options)
         if translated?(name) and options[:translated]
           attribute_will_change! name.to_s
-          globalize.write(options[:locale] || Globalize.locale, name, value)
+          the_locale = options[:locale] || Globalize.locale
+          self.translations.reject!{|t| t.new_record? && t.locale != the_locale}
+          globalize.write(the_locale, name, value)
         else
           super(name, value)
         end
@@ -89,6 +104,7 @@ module Globalize
       end
 
       def reload(options = nil)
+        @translation_caches.clear if defined? @translation_caches
         translated_attribute_names.each { |name| @attributes.delete(name.to_s) }
         globalize.reset
         super(options)
@@ -118,13 +134,17 @@ module Globalize
       def translation_for(locale)
         @translation_caches ||= {}
         unless @translation_caches[locale]
-          # Enumberable#detect is better since we have the translations collection (already) loaded 
-          # using either Model.includes(:translations) or Model.with_translations
+          # Fetch translations from database as those in the translation collection may be incomplete
           _translation = translations.detect{|t| t.locale.to_s == locale.to_s}
+          _translation ||= translations.with_locale(locale).first
           _translation ||= translations.build(:locale => locale)
           @translation_caches[locale] = _translation
         end
         @translation_caches[locale]
+      end
+
+      def globalize_fallbacks(locale)
+        Globalize.fallbacks(locale)
       end
 
       def rollback

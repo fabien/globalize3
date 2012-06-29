@@ -25,6 +25,12 @@ class Validatee < ActiveRecord::Base
   translates :string
 end
 
+module Nested
+  class NestedValidatee < ActiveRecord::Base
+    translates :string
+  end
+end
+
 
 class Parent < ActiveRecord::Base
   translates :content
@@ -51,12 +57,12 @@ class Migrated < ActiveRecord::Base
   translates :name
 end
 
-class MigratedWithUltraLongModelName < ActiveRecord::Base
+class MigratedWithMegaUltraSuperLongModelNameWithMoreThenSixtyCharacters < ActiveRecord::Base
   translates :name
 end
 
 class UppercaseTableName < ActiveRecord::Base
-  set_table_name "UPPERCASE_TABLE_NAME"
+  self.table_name = "UPPERCASE_TABLE_NAME"
   translates :name
 end
 
@@ -65,4 +71,18 @@ end
 
 class Task < ActiveRecord::Base
   translates :name, :fallbacks_for_empty_translations => true
+  cattr_accessor :fallbacks
+  def globalize_fallbacks(locale)
+    self.class.fallbacks || super
+  end
+end
+
+class NewsItem < ActiveRecord::Base
+  translates :name, :foreign_key => :news_id
+  self.table_name = :news
+end
+
+class Page < ActiveRecord::Base
+  translates :title
+  translates :body
 end

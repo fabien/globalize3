@@ -140,6 +140,37 @@ class TranslatedTest < Test::Unit::TestCase
     post.update_attribute :title, ''
     assert_equal '', post.title
   end
+
+  test 'creating just one translation when fallbacks set' do
+    I18n.fallbacks.clear
+    I18n.fallbacks.map :de => [ :fr ]
+    I18n.locale = :de
+
+    task = Task.new :name => 'foo'
+    assert_equal false, task.translations.any?(&:persisted?)
+    task.save
+
+    assert_equal [:de], task.translations.map(&:locale).sort
+  end
+
+  test 'fallback overwritten in model' do
+    I18n.fallbacks.clear
+    Task.fallbacks = [:en, :de]
+    I18n.locale = :de
+
+    task = Task.create(:name => 'foo')
+    assert_equal 'foo', task.name
+
+    I18n.locale = :en
+    assert_equal 'foo', task.name
+    task.name = 'bar'
+    assert_equal 'bar', task.name
+
+    I18n.locale = :fr
+    assert_equal 'bar', task.name
+
+    Task.fallbacks = nil
+  end
 end
 # TODO should validate_presence_of take fallbacks into account? maybe we need
 #   an extra validation call, or more options for validate_presence_of.

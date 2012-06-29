@@ -6,7 +6,7 @@ Globalize3 is much more lightweight and compatible than its predecessor Globaliz
 
 h2. Requirements
 
-ActiveRecord > 3.0.0.rc
+ActiveRecord > 3.0.0
 I18n
 
 h2. Installation
@@ -77,6 +77,23 @@ class CreatePosts < ActiveRecord::Migration
 end
 </code></pre>
 
+Also, you can pass options for specific columns. Here’s an example:
+
+<pre><code>
+class CreatePosts < ActiveRecord::Migration
+  def up
+    create_table :posts do |t|
+      t.timestamps
+    end
+    Post.create_translation_table! :title => :string, :text => {:type => :text, :null => false, :default => 'abc'}
+  end
+  def down
+    drop_table :posts
+    Post.drop_translation_table!
+  end
+end
+</code></pre>
+
 Note that the ActiveRecord model @Post@ must already exist and have a @translates@ directive listing the translated fields.
 
 h2. Migrating existing data to and from the translated version
@@ -106,15 +123,17 @@ the translation was applied. Here's an example (which assumes you already have a
 
 h2. Versioning with Globalize3
 
-Globalize3 nicely integrates with "vestal_versions":http://github.com/laserlemon/vestal_versions:
+Globalize3 nicely integrates with
+"paper_trail":https://github.com/airblade/paper_trail.  To add versioning 
+support to your model, you'll want to add the <code>:versioning => true</code>
+option to your call to <code>translates</code>.  An example from our test suite:
 
 <pre><code>
-require 'globalize/versioning/vestal_versions'
+  translates :title, :content, :published, :published_at, :versioning => true
 </code></pre>
 
-As of writing (2010-08-05) the original vestal_versions respository has not been updated to be compatible with Rails 3 though. You can use "this fork":http://github.com/svenfuchs/vestal_versions though. "Globalize3's Gemfile":http://github.com/svenfuchs/globalize3/blob/master/Gemfile#L10 is currently set up accordingly.
-
-Please also note that @update_attribute@ currently hides itself from dirty tracking in ActiveRecord >= 3.0.0.beta (which is considered a "regression":http://github.com/rails/rails/commit/01629d180468049d17a8be6900e27a4f0d2b18c4#commitcomment-123199). That means that you currently need to use attribute writers or @update_attributes@ in order to track changes/versions for your models.
+You will also need to have already generated the versions table that paper_trail
+expects.  See the paper_trail README for more details.
 
 Also, please see the tests in test/globalize3/versioning_test.rb for some current gotchas.
 
@@ -189,6 +208,7 @@ h2. Alternative Solutions
 
 * "Veger's fork":http://github.com/veger/globalize2 - uses default AR schema for the default locale, delegates to the translations table for other locales only
 * "TranslatableColumns":http://github.com/iain/translatable_columns - have multiple languages of the same attribute in a model (Iain Hecker)
+* "Traco":https://github.com/barsoom/traco - A newer take on using multiple columns in the same model (Barsoom)
 * "localized_record":http://github.com/glennpow/localized_record - allows records to have localized attributes without any modifications to the database (Glenn Powell)
 * "model_translations":http://github.com/janne/model_translations - Minimal implementation of Globalize2 style model translations (Jan Andersson)
 
@@ -200,4 +220,4 @@ h2. Related solutions
 * "migrate_from_globalize1":http://gist.github.com/120867 - migrate model translations from Globalize1 to globalize2 (Tomasz Stachewicz)</li>
 * "easy_globalize2_accessors":http://github.com/astropanic/easy_globalize2_accessors - easily access (read and write) globalize2-translated fields (astropanic, Tomasz Stachewicz)</li>
 * "globalize2-easy-translate":http://github.com/bsamman/globalize2-easy-translate - adds methods to easily access or set translated attributes to your model (bsamman)</li>
-* "batch_translations":http://github.com/alvarezrilla/batch_translations - allow saving multiple globalize2 translations in the same request (Jose Alvarez Rilla)</li>
+* "batch_translations":http://github.com/rilla/batch_translations - allow saving multiple globalize2 translations in the same request (Jose Alvarez Rilla)</li>

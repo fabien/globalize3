@@ -10,7 +10,8 @@ module Globalize
       end
 
       delegate :create_translation_table!, :drop_translation_table!,
-        :translation_index_name, :to => :globalize_migrator
+        :translation_index_name, :translation_locale_index_name,
+        :to => :globalize_migrator
 
       class Migrator
         include Globalize::ActiveRecord::Exceptions
@@ -30,13 +31,22 @@ module Globalize
 
           create_translation_table
           move_data_to_translation_table if options[:migrate_data]
+          remove_source_columns if options[:remove_source_columns]
           create_translations_index
+          clear_schema_cache!
+        end
+
+        def remove_source_columns
+          translated_attribute_names.each do |attribute|
+            connection.remove_column(table_name, attribute)
+          end
         end
 
         def drop_translation_table!(options = {})
           move_data_to_model_table if options[:migrate_data]
           drop_translations_index
           drop_translation_table
+          clear_schema_cache!
         end
 
         def complete_translated_fields
@@ -49,7 +59,13 @@ module Globalize
           connection.create_table(translations_table_name) do |t|
             t.references table_name.sub(/^#{table_name_prefix}/, '').singularize
             t.string :locale
-            fields.each { |name, type| t.column name, type }
+            fields.each do |name, options|
+              if options.is_a? Hash
+                t.column name, options.delete(:type), options
+              else
+                t.column name, options
+              end
+            end
             t.timestamps
           end
         end
@@ -60,6 +76,12 @@ module Globalize
             "#{table_name.sub(/^#{table_name_prefix}/, "").singularize}_id",
             :name => translation_index_name
           )
+          # index for select('DISTINCT locale') call in translation.rb
+          connection.add_index(
+            translations_table_name,
+            :locale,
+            :name => translation_locale_index_name
+          )
         end
 
         def drop_translation_table
@@ -67,21 +89,23 @@ module Globalize
         end
 
         def drop_translations_index
-          connection.remove_index(translations_table_name, :name => translation_index_name) rescue nil
+          connection.remove_index(translations_table_name, :name => translation_index_name)
         end
 
         def move_data_to_translation_table
-          # Find all of the existing untranslated attributes for this model.
-          all_model_fields = @model.all
-          model_attributes = all_model_fields.collect {|m| m.untranslated_attributes}
-          all_model_fields.each do |model_record|
-            # Assign the attributes back to the model which will enable globalize3 to translate them.
-            model_record.attributes = model_attributes.detect{|a| a['id'] == model_record.id}
-            model_record.save!
+          model.find_each do |record|
+            untranslated_attributes = record.untranslated_attributes
+            translation = record.translations.build(:locale => I18n.default_locale)
+            translated_attribute_names.each do |attribute|
+              translation[attribute] = untranslated_attributes[attribute.to_s]
+            end
+            translation.save!
           end
         end
 
         def move_data_to_model_table
+          add_missing_columns
+
           # Find all of the translated attributes for all records in the model.
           all_translated_attributes = @model.all.collect{|m| m.attributes}
           all_translated_attributes.each do |translated_record|
@@ -96,9 +120,13 @@ module Globalize
         end
 
         def validate_translated_fields
-          fields.each do |name, type|
+          fields.each do |name, options|
             raise BadFieldName.new(name) unless valid_field_name?(name)
-            raise BadFieldType.new(name, type) unless valid_field_type?(name, type)
+            if options.is_a? Hash
+              raise BadFieldType.new(name, options[:type]) unless valid_field_type?(name, options[:type])
+            else
+              raise BadFieldType.new(name, options) unless valid_field_type?(name, options)
+            end
           end
         end
 
@@ -115,10 +143,29 @@ module Globalize
         end
 
         def translation_index_name
-          # FIXME what's the max size of an index name?
           index_name = "index_#{translations_table_name}_on_#{table_name.singularize}_id"
-          index_name.size < 50 ? index_name : "index_#{Digest::SHA1.hexdigest(index_name)}"
+          index_name.size < connection.index_name_length ? index_name : "index_#{Digest::SHA1.hexdigest(index_name)}"
         end
+
+        def translation_locale_index_name
+          index_name = "index_#{translations_table_name}_on_locale"
+          index_name.size < connection.index_name_length ? index_name : "index_#{Digest::SHA1.hexdigest(index_name)}"
+        end
+
+        def clear_schema_cache!
+          connection.schema_cache.clear! if connection.respond_to? :schema_cache
+        end
+
+        private
+
+        def add_missing_columns
+          translated_attribute_names.map(&:to_s).each do |attribute|
+            unless model.column_names.include?(attribute)
+              connection.add_column(table_name, attribute, model::Translation.columns_hash[attribute].type)
+            end
+          end
+        end
+
       end
     end
   end

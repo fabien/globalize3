@@ -20,8 +20,8 @@ module Globalize
       end
 
       def fetch(locale, name)
-        Globalize.fallbacks(locale).each do |fallback|
-          value = fetch_stash(fallback, name) || fetch_attribute(fallback, name)
+        record.globalize_fallbacks(locale).each do |fallback|
+          value = stash.contains?(fallback, name) ? fetch_stash(fallback, name) : fetch_attribute(fallback, name)
 
           unless fallbacks_for?(value)
             set_metadata(value, :locale => fallback, :requested_locale => locale)
@@ -37,13 +37,16 @@ module Globalize
 
       def save_translations!
         stash.each do |locale, attrs|
-          translation = record.translations.find_or_initialize_by_locale(locale.to_s)
-          attrs.each { |name, value| translation[name] = value }
-          translation.save!
+          if attrs.any?
+            translation = record.translations.find_or_initialize_by_locale(locale.to_s)
+            attrs.each { |name, value| translation[name] = value }
+            translation.save!
+          end
         end
+
         record.translations.each(&:reload)
         record.translations.reset
-        stash.clear
+        reset
       end
 
       def reset
@@ -76,7 +79,7 @@ module Globalize
       end
 
       def set_metadata(object, metadata)
-        object.translation_metadata.merge!(meta_data) if object.respond_to?(:translation_metadata)
+        object.translation_metadata.merge!(metadata) if object.respond_to?(:translation_metadata)
         object
       end
 
